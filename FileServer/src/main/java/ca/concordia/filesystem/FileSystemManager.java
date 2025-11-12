@@ -29,7 +29,7 @@ public class FileSystemManager {
         // Initialize the file system manager with a file
         if (instance == null) {
             try {
-                // Make sure parent folder exists
+                // Make sure parent folder existts
                 File f = new File(filename);
                 File parent = f.getParentFile();
                 if (parent != null && !parent.exists()) {
@@ -59,6 +59,7 @@ public class FileSystemManager {
 
     public void createFile(String fileName) throws Exception {
         // TODO
+        //double check it is not exceeding 10 blocks (with the other files) and is not the 6th file in the system
         throw new UnsupportedOperationException("Method not implemented yet.");
     }
 
