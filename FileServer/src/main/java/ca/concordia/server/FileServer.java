@@ -49,6 +49,7 @@ public class FileServer {
                             case "WRITE":
                                 return;
                             case "LIST":
+                                //test
                                 return;
                             case "QUIT":
                                 writer.println("SUCCESS: Disconnecting.");
