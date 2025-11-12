@@ -34,12 +34,27 @@ public class FileServer {
                     while ((line = reader.readLine()) != null) {
                         System.out.println("Received from client: " + line);
                         String[] parts = line.split(" ");
+                        if (parts.length == 0) {
+                            writer.println("ERROR: Empty command.");
+                            writer.flush();
+                            continue;
+                        }
                         String command = parts[0].toUpperCase();
 
                         switch (command) {
                             case "CREATE":
-                                fsManager.createFile(parts[1]);
-                                writer.println("SUCCESS: File '" + parts[1] + "' created.");
+                                if (parts.length < 2) {
+                                    writer.println("ERROR: Missing filename.");
+                                    writer.flush();
+                                    break;
+                                }
+                                try {
+                                    fsManager.createFile(parts[1]);
+                                    writer.println("SUCCESS: File '" + parts[1] + "' created.");
+                                } catch (Exception e) {
+                                    writer.println("ERROR: " + e.getMessage());
+                                    e.printStackTrace();
+                                }
                                 writer.flush();
                                 break;
                             case "READ":
@@ -49,13 +64,30 @@ public class FileServer {
                             case "WRITE":
                                 return;
                             case "LIST":
-                                //test
-                                return;
+                                String[][] files = fsManager.listFiles();
+                                if (files.length == 0) {
+                                    writer.println("No files found.");
+                                    writer.flush();
+                                } else {
+                                    StringBuilder sb = new StringBuilder();
+                                    for (int i = 0; i < files.length; i++) {
+                                        if (i > 0) sb.append(" | ");
+                                        String[] file = files[i];
+                                        sb.append("File Name: ").append(file[0])
+                                                .append(", File Size: ").append(file[1])
+                                                .append(", First Block: ").append(file[2]);
+                                    }
+                                    writer.println(sb.toString());
+                                }
+                                writer.flush();
+                                break;
                             case "QUIT":
                                 writer.println("SUCCESS: Disconnecting.");
+                                writer.flush();
                                 return;
                             default:
                                 writer.println("ERROR: Unknown command.");
+                                writer.flush();
                                 break;
                         }
                     }

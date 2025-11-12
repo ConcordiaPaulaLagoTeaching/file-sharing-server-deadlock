@@ -10,6 +10,8 @@ import ca.concordia.filesystem.datastructures.FEntry;
 
 import java.io.File;
 import java.io.RandomAccessFile;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class FileSystemManager {
@@ -58,9 +60,84 @@ public class FileSystemManager {
     }
 
     public void createFile(String fileName) throws Exception {
-        // TODO
-        //double check it is not exceeding 10 blocks (with the other files) and is not the 6th file in the system
-        throw new UnsupportedOperationException("Method not implemented yet.");
+
+        if (fileName == null || fileName.isEmpty()) {
+            throw new IllegalArgumentException("File name cannot be empty.");
+        }
+
+        globalLock.lock();
+        try {
+            for (FEntry entry : inodeTable) {
+                if (entry != null && entry.getFilename().equals(fileName)) {
+                    throw new Exception("File with that name already exists.");
+                }
+            }
+
+
+        int freeIndex = -1;
+        for (int i=0; i< inodeTable.length; i++) {
+            if (inodeTable[i] == null) {
+                freeIndex = i;
+                break;
+            }
+        }
+
+        if (freeIndex == -1) {
+            throw new Exception("File system full. Maximum number of " + MAXFILES + " reached. Delete a file before creating a new one.");
+        }
+
+        int blockIndex = -1;
+        for (int i=0; i< freeBlockList.length; i++) {
+            if (freeBlockList[i]) {
+                blockIndex = i;
+                freeBlockList[i] = false;
+                break;
+            }
+        }
+
+        if (blockIndex == -1) {
+            throw new Exception("No free space available to create new file. Delete some files to free up space.");
+        }
+
+        inodeTable[freeIndex] = new FEntry(fileName, (short) 0, (short) blockIndex);
+
+        metaData();
+        } finally {
+            globalLock.unlock();
+        }
+
+    }
+
+    public String[][] listFiles() {
+        globalLock.lock();
+        try{
+            int length = 0;
+            for (FEntry entry : inodeTable) {
+                if (entry != null) {
+                    length++;
+                }
+            }
+            if (length == 0) {
+                return new String[0][];
+            }
+            String[][] files = new String[length][3];
+            int index = 0;
+            for (int i = 0; i < inodeTable.length; i++) {
+                if (inodeTable[i] != null) {
+                    files[index][0] = inodeTable[i].getFilename();
+                    files[index][1] = Short.toString(inodeTable[i].getFilesize());
+                    files[index][2] = Short.toString(inodeTable[i].getFirstBlock());
+                    index++;
+                }
+            }
+            return files;
+        } finally {
+            globalLock.unlock();
+        }
+    }
+
+    private void metaData(){
+
     }
 
 
