@@ -60,9 +60,48 @@ public class FileServer {
                             case "READ":
                                 return;
                             case "DELETE":
-                                return;
+                                break;
                             case "WRITE":
-                                return;
+                                if (parts.length < 2) {
+                                    writer.println("ERROR: Missing filename or content.");
+                                    writer.flush();
+                                    break;
+                                }
+                                try {
+                                    // filename is parts[1]; content is the rest of the original line (preserves spaces)
+                                    String filename = parts[1];
+                                    int idx = line.indexOf(filename);
+                                    String contentStr = "";
+                                    if (idx >= 0) {
+                                        contentStr = line.substring(idx + filename.length()).trim();
+                                    }
+
+                                    if (contentStr.isEmpty()) {
+                                        writer.println("ERROR: No content provided to write.");
+                                        writer.flush();
+                                        break;
+                                    }
+
+                                    byte[] data;
+                                    // support optional BASE64: prefix for binary data
+                                    if (contentStr.startsWith("BASE64:")) {
+                                        String b64 = contentStr.substring("BASE64:".length());
+                                        data = java.util.Base64.getDecoder().decode(b64);
+                                    } else {
+                                        data = contentStr.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                                    }
+
+                                    try {
+                                        fsManager.writeFile(filename, data);
+                                        writer.println("SUCCESS: Wrote " + data.length + " bytes to '" + filename + "'.");
+                                    } catch (Exception e) {
+                                        writer.println("ERROR: " + e.getMessage());
+                                        e.printStackTrace();
+                                    }
+                                } finally {
+                                    writer.flush();
+                                }
+                                break;
                             case "LIST":
                                 String[][] files = fsManager.listFiles();
                                 if (files.length == 0) {
