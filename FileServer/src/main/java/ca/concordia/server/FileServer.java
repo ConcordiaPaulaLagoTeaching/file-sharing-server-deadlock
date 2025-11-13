@@ -7,6 +7,9 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+import java.nio.charset.StandardCharsets;
+
+
 public class FileServer {
 
     private FileSystemManager fsManager;
@@ -57,10 +60,29 @@ public class FileServer {
                                 }
                                 writer.flush();
                                 break;
-                            case "READ":
-                                return;
+
+                            case "LIST":
+                                String[][] files = fsManager.listFiles();
+                                if (files.length == 0) {
+                                    writer.println("No files found.");
+                                    writer.flush();
+                                } else {
+                                    StringBuilder sb = new StringBuilder();
+                                    for (int i = 0; i < files.length; i++) {
+                                        if (i > 0) sb.append(" | ");
+                                        String[] file = files[i];
+                                        sb.append("File Name: ").append(file[0])
+                                                .append(", File Size: ").append(file[1])
+                                                .append(", First Block: ").append(file[2]);
+                                    }
+                                    writer.println(sb.toString());
+                                }
+                                writer.flush();
+                                break;
+
                             case "DELETE":
                                 break;
+
                             case "WRITE":
                                 if (parts.length < 2) {
                                     writer.println("ERROR: Missing filename or content.");
@@ -102,24 +124,26 @@ public class FileServer {
                                     writer.flush();
                                 }
                                 break;
-                            case "LIST":
-                                String[][] files = fsManager.listFiles();
-                                if (files.length == 0) {
-                                    writer.println("No files found.");
+
+                            case "READ":
+                                if (parts.length < 2) {
+                                    writer.println("ERROR: Missing filename.");
                                     writer.flush();
-                                } else {
-                                    StringBuilder sb = new StringBuilder();
-                                    for (int i = 0; i < files.length; i++) {
-                                        if (i > 0) sb.append(" | ");
-                                        String[] file = files[i];
-                                        sb.append("File Name: ").append(file[0])
-                                                .append(", File Size: ").append(file[1])
-                                                .append(", First Block: ").append(file[2]);
-                                    }
-                                    writer.println(sb.toString());
+                                    break;
+                                }
+                                try {
+                                    String filename = parts[1];
+                                    byte[] data = fsManager.readFile(filename);
+                                    String content = new String(data, StandardCharsets.UTF_8);
+                                    writer.println("SUCCESS: READ " + data.length + " bytes. CONTENT:" + content);
+                                } catch (Exception e) {
+                                    writer.println("ERROR: " + e.getMessage());
+                                    e.printStackTrace();
                                 }
                                 writer.flush();
                                 break;
+
+
                             case "QUIT":
                                 writer.println("SUCCESS: Disconnecting.");
                                 writer.flush();

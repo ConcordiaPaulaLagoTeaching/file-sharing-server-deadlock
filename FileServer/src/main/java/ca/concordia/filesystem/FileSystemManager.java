@@ -1,9 +1,3 @@
-//DELETE LATER
-//To run main: run these commands in terminal
-//First cd to FileServer folder with cd FileServer
-//mvn -DskipTests package
-//mvn exec:java -Dexec.mainClass="ca.concordia.Main"
-
 package ca.concordia.filesystem;
 
 import ca.concordia.filesystem.datastructures.FEntry;
@@ -13,7 +7,9 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.concurrent.locks.ReentrantLock;
+//import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import ca.concordia.filesystem.datastructures.FNode;
 
 public class FileSystemManager {
@@ -23,13 +19,13 @@ public class FileSystemManager {
     private final int METADATA_VERSION = 1;
     private final int FILENAME_BYTES = 11;
     private final int INODE_RECORD_BYTES = FILENAME_BYTES + 2 + 2; // filename + short filesize + short firstBlock
-    private final int metadataSize;
     private final int MAXFILES = 5;
     private final int MAXBLOCKS = 10;
     private static FileSystemManager instance = null; // initially null, set in constructor
-    private RandomAccessFile disk; // initialized in constructor
-    private final ReentrantLock globalLock = new ReentrantLock();
-    private FNode[] blockTable;
+    private final RandomAccessFile disk; // initialized in constructor
+    //private final ReentrantLock globalLock = new ReentrantLock();
+    private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
+    private final FNode[] blockTable;
 
     private static final int BLOCK_SIZE = 128; // Example block size
 
@@ -51,8 +47,8 @@ public class FileSystemManager {
                 this.disk = new RandomAccessFile(f, "rw");
 
                 this.dataAreaSize = totalSize;
-                this.metadataSize = 4 + 4 + (MAXFILES * INODE_RECORD_BYTES) + (MAXBLOCKS * 1) + (MAXBLOCKS * 4); // magic + ver + inodes + freeBitmap + block nexts
-                long minLen = this.dataAreaSize + this.metadataSize;
+                int metadataSize = 4 + 4 + (MAXFILES * INODE_RECORD_BYTES) + (MAXBLOCKS * 1) + (MAXBLOCKS * 4); // magic + ver + inodes + freeBitmap + block nexts
+                long minLen = this.dataAreaSize + metadataSize;
                 if (this.disk.length() < minLen) {
                     this.disk.setLength(minLen);
                 }
@@ -89,7 +85,7 @@ public class FileSystemManager {
             throw new IllegalArgumentException("File name cannot be empty.");
         }
 
-        globalLock.lock();
+        rwLock.writeLock().lock();
         try {
             for (FEntry entry : inodeTable) {
                 if (entry != null && entry.getFilename().equals(fileName)) {
@@ -127,13 +123,13 @@ public class FileSystemManager {
 
         metaData();
         } finally {
-            globalLock.unlock();
+            rwLock.writeLock().unlock();
         }
 
     }
 
     public String[][] listFiles(){
-        globalLock.lock();
+        rwLock.readLock().lock();
         try{
             int length = 0;
             for (FEntry entry : inodeTable) {
@@ -156,7 +152,7 @@ public class FileSystemManager {
             }
             return files;
         } finally {
-            globalLock.unlock();
+            rwLock.readLock().unlock();
         }
     }
 
@@ -167,11 +163,8 @@ public class FileSystemManager {
         if (filename == null || filename.isEmpty()) {
             throw new IllegalArgumentException("Make sure to enter a valid filename.");
         }
-        if (content.length == 0) {
-            throw new IllegalArgumentException("Make sure to enter valid content to write.");
-        }
 
-        globalLock.lock();
+        rwLock.writeLock().lock();
         boolean[] oldFree = null;
         FNode[] oldBlockTable = null;
         short oldFileSize = 0;
@@ -226,19 +219,29 @@ public class FileSystemManager {
 
             // snapshot metadata for rollback
             oldFree = Arrays.copyOf(freeBlockList, freeBlockList.length);
-            oldBlockTable = Arrays.copyOf(blockTable, blockTable.length);
+            oldBlockTable = new FNode[blockTable.length];
+            for (int i = 0; i < blockTable.length; i++) {
+                FNode n = blockTable[i];
+                if (n != null) {
+                    FNode copy = new FNode(i);
+                    copy.setNext(n.getNext());
+                    oldBlockTable[i] = copy;
+                } else {
+                    oldBlockTable[i] = null;
+                }
+            }
             oldFileSize = entry.getFilesize();
             oldFirstBlock = entry.getFirstBlock();
 
             // Apply metadata changes:
-            // free blocks that were in currentBlocks but not in targetBlocks
+            // free blocks not needed
             for (int b : currentBlocks) {
                 if (!targetBlocks.contains(b)) {
                     freeBlockList[b] = true;
                     blockTable[b] = null;
                 }
             }
-            // allocate new blocks (mark used and create FNode) for blocks in targetBlocks not in currentBlocks
+            // allocate new blocks
             for (int b : targetBlocks) {
                 if (!currentBlocks.contains(b)) {
                     freeBlockList[b] = false;
@@ -261,7 +264,7 @@ public class FileSystemManager {
             }
 
             // update inode metadata
-            short newFirstBlock = (targetBlocks.size() > 0) ? (short) (int) targetBlocks.get(0) : (short) -1;
+            short newFirstBlock = targetBlocks.isEmpty() ? (short) -1 : (short) (int) targetBlocks.get(0);
             entry.setFilesize((short) content.length);
             entry.setFirstBlock(newFirstBlock);
 
@@ -288,21 +291,95 @@ public class FileSystemManager {
                         disk.write(zeros);
                     }
                 }
-                // persist metadata (if you have a metadata writer, call it here)
+                // persist metadata
                 metaData();
             } catch (Exception ioEx) {
                 // rollback metadata on write failure
                 freeBlockList = oldFree;
-                blockTable = oldBlockTable;
+                for (int i = 0; i < blockTable.length; i++) {
+                    FNode old = oldBlockTable[i];
+                    if (old == null) {
+                        blockTable[i] = null;
+                    } else {
+                        blockTable[i] = new FNode(i);
+                        blockTable[i].setNext(old.getNext());
+                    }
+                }
                 inodeTable[inodeIndex].setFilesize(oldFileSize);
                 inodeTable[inodeIndex].setFirstBlock(oldFirstBlock);
                 throw new Exception("Failed to write file data: " + ioEx.getMessage(), ioEx);
             }
 
         } finally {
-            globalLock.unlock();
+            rwLock.writeLock().unlock();
+        }
+    }
+
+    public byte[] readFile(String filename) throws Exception {
+        if (filename == null || filename.isEmpty()) {
+            throw new IllegalArgumentException("Filename cannot be empty.");
         }
 
+        rwLock.readLock().lock();
+        try {
+            // Find the file in inode table
+            FEntry entry = null;
+            for (FEntry e : inodeTable) {
+                if (e != null && e.getFilename().equals(filename)) {
+                    entry = e;
+                    break;
+                }
+            }
+
+            if (entry == null) {
+                throw new Exception("File not found: " + filename);
+            }
+
+            short filesize = entry.getFilesize();
+
+            // Handle empty file
+            if (filesize == 0) {
+                return new byte[0];
+            }
+
+            short firstBlock = entry.getFirstBlock();
+            if (firstBlock < 0 || firstBlock >= MAXBLOCKS) {
+                throw new Exception("Invalid first block for file: " + filename);
+            }
+
+            // Read data by following the block chain
+            byte[] result = new byte[filesize];
+            int bytesRead = 0;
+            int currentBlockId = firstBlock;
+
+            while (currentBlockId != -1 && bytesRead < filesize) {
+                // Read block from disk
+                long offset = (long) currentBlockId * BLOCK_SIZE;
+                disk.seek(offset);
+
+                int remaining = filesize - bytesRead;
+                int toRead = Math.min(remaining, BLOCK_SIZE);
+
+                disk.readFully(result, bytesRead, toRead);
+                bytesRead += toRead;
+
+                // Move to next block
+                FNode node = blockTable[currentBlockId];
+                if (node == null) {
+                    break;
+                }
+                currentBlockId = node.getNext();
+            }
+
+            if (bytesRead != filesize) {
+                throw new Exception("File corrupted: expected " + filesize + " bytes, read " + bytesRead);
+            }
+
+            return result;
+
+        } finally {
+            rwLock.readLock().unlock();
+        }
     }
 
     private byte[] fixedBytes(String s, int len) {
