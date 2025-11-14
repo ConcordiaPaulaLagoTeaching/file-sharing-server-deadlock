@@ -44,6 +44,7 @@ public class FileServer {
 
     // All command handling remains here
     void handleClient(Socket clientSocket) {
+        System.out.println("Thread [" + Thread.currentThread().getName() + "] handling client: " + clientSocket);
         System.out.println("Handling client: " + clientSocket);
         try (
                 BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
@@ -89,7 +90,7 @@ public class FileServer {
                                         .append(", File Size: ").append(file[1])
                                         .append(", First Block: ").append(file[2]);
                             }
-                            writer.println(sb.toString());
+                            writer.println(sb);
                         }
                         writer.flush();
                         break;
