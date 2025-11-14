@@ -30,7 +30,7 @@ public class Main {
                     System.out.println("Message sent to the server: " + userInput);
                     //get response
                     String response = reader.readLine();
-                    System.out.println("Response from server: " + response);
+                    System.out.println("Response from server:\n" + response);
 
                     userInput = scanner.nextLine(); // Read next line
                 }
