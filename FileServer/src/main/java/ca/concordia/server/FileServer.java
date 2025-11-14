@@ -81,6 +81,18 @@ public class FileServer {
                                 break;
 
                             case "DELETE":
+                                parts = line.split("\\s+", 2);
+                                if (parts.length < 2 || parts[1].trim().isEmpty()) {
+                                    writer.println("ERROR: Missing filename");
+                                    break;
+                                }
+                                String filename1 = parts[1].trim();
+                                try {
+                                    fsManager.deleteFile(filename1);
+                                    writer.println("File deleted");
+                                } catch (Exception e) {
+                                    writer.println("ERROR " + e.getMessage());
+                                }
                                 break;
 
                             case "WRITE":
@@ -90,7 +102,6 @@ public class FileServer {
                                     break;
                                 }
                                 try {
-                                    // filename is parts[1]; content is the rest of the original line (preserves spaces)
                                     String filename = parts[1];
                                     int idx = line.indexOf(filename);
                                     String contentStr = "";
@@ -105,17 +116,30 @@ public class FileServer {
                                     }
 
                                     byte[] data;
-                                    // support optional BASE64: prefix for binary data
-                                    if (contentStr.startsWith("BASE64:")) {
-                                        String b64 = contentStr.substring("BASE64:".length());
-                                        data = java.util.Base64.getDecoder().decode(b64);
-                                    } else {
-                                        data = contentStr.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                                    data = contentStr.getBytes(StandardCharsets.UTF_8);
+                                    final byte[] existing;
+
+                                    try{
+                                        existing = fsManager.readFile(filename);
+                                    } catch (Exception e){
+                                        writer.println("ERROR: File not found.");
+                                        writer.flush();
+                                        break;
                                     }
 
+                                    byte[] existingSafe;
+                                    if (existing == null){
+                                        existingSafe = new byte[0];
+                                    } else {
+                                        existingSafe = existing;
+                                    }
+                                    byte[] combined = new byte[existingSafe.length + data.length];
+                                    System.arraycopy(existingSafe, 0, combined, 0, existingSafe.length);
+                                    System.arraycopy(data, 0, combined, existingSafe.length, data.length);
+
                                     try {
-                                        fsManager.writeFile(filename, data);
-                                        writer.println("SUCCESS: Wrote " + data.length + " bytes to '" + filename + "'.");
+                                        fsManager.writeFile(filename, combined);
+                                        writer.println("SUCCESS: " + filename + " is now " + combined.length + " bytes.");
                                     } catch (Exception e) {
                                         writer.println("ERROR: " + e.getMessage());
                                         e.printStackTrace();
@@ -135,7 +159,7 @@ public class FileServer {
                                     String filename = parts[1];
                                     byte[] data = fsManager.readFile(filename);
                                     String content = new String(data, StandardCharsets.UTF_8);
-                                    writer.println("SUCCESS: READ " + data.length + " bytes. CONTENT:" + content);
+                                    writer.println("SUCCESS: READ " + data.length + " bytes. CONTENT: " + content);
                                 } catch (Exception e) {
                                     writer.println("ERROR: " + e.getMessage());
                                     e.printStackTrace();

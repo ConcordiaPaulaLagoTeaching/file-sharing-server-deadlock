@@ -5,6 +5,7 @@ import ca.concordia.filesystem.datastructures.FEntry;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.Writer;
 import java.util.Arrays;
 import java.util.Objects;
 //import java.util.concurrent.locks.ReentrantLock;
@@ -119,6 +120,9 @@ public class FileSystemManager {
             throw new Exception("No free space available to create new file. Delete some files to free up space.");
         }
 
+        blockTable[blockIndex] = new FNode(blockIndex);
+        blockTable[blockIndex].setNext(-1);
+
         inodeTable[freeIndex] = new FEntry(fileName, (short) 0, (short) blockIndex);
 
         metaData();
@@ -156,7 +160,59 @@ public class FileSystemManager {
         }
     }
 
-    public void deleteFile(String filename){}
+    public void deleteFile(String filename) throws Exception {
+        if (filename == null || filename.isEmpty()) {
+            throw new IllegalArgumentException("Filename cannot be empty.");
+        }
+
+        rwLock.writeLock().lock();
+        try {
+            int inodeIndex = -1;
+            for (int i = 0; i < inodeTable.length; i++) {
+                FEntry e = inodeTable[i];
+                if (e != null && e.getFilename().equals(filename)) {
+                    inodeIndex = i;
+                    break;
+                }
+            }
+
+            if (inodeIndex == -1) {
+                throw new Exception("ERROR: File " + filename + " not found.");
+            }
+
+            FEntry entry = inodeTable[inodeIndex];
+            short firstBlock = entry.getFirstBlock();
+
+            if (firstBlock >= 0 && firstBlock < MAXBLOCKS) {
+                synchronized (disk) {
+                    byte[] zeros = new byte[BLOCK_SIZE];
+                    int current = firstBlock;
+                    while (current != -1) {
+                        if (current < 0 || current >= MAXBLOCKS) {
+                            break;
+                        }
+                        FNode node = blockTable[current];
+                        int next = (node == null) ? -1 : node.getNext();
+
+                        long offset = (long) current * BLOCK_SIZE;
+                        disk.seek(offset);
+                        disk.write(zeros);
+
+                        freeBlockList[current] = true;
+                        blockTable[current] = null;
+
+                        current = next;
+                    }
+                    disk.getFD().sync();
+                }
+            }
+
+            inodeTable[inodeIndex] = null;
+            metaData();
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+    }
 
     public void writeFile(String filename, byte[] content) throws Exception {
 
@@ -393,7 +449,6 @@ public class FileSystemManager {
     }
 
     private void metaData() throws IOException {
-        // write metadata atomically to reserved metadata area after dataAreaSize
         synchronized (disk) {
             disk.seek(dataAreaSize);
             disk.writeInt(METADATA_MAGIC);
