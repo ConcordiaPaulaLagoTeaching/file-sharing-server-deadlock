@@ -30,14 +30,14 @@ public class FileSystemManager {
 
     private static final int BLOCK_SIZE = 128; // Example block size
 
-    private FEntry[] inodeTable; // Array of inodes
+    private final FEntry[] inodeTable; // Array of inodes
     private boolean[] freeBlockList; // Bitmap for free blocks
 
     public FileSystemManager(String filename, int totalSize) {
         // Initialize the file system manager with a file
         if (instance == null) {
             try {
-                // Make sure parent folder existts
+                // Make sure parent folder exists
                 File f = new File(filename);
                 File parent = f.getParentFile();
                 if (parent != null && !parent.exists()) {
@@ -519,7 +519,4 @@ public class FileSystemManager {
             }
         }
     }
-
-
-    // TODO: Add readFile, writeFile and other required methods,
 }
