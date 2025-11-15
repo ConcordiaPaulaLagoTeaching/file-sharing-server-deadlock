@@ -42,6 +42,22 @@ public class FileServer {
         }
     }
 
+    // Test-support method: runs server until maxConnections accepted then returns.
+    public void startLimited(int maxConnections) {
+        int accepted = 0;
+        try (ServerSocket serverSocket = new ServerSocket(this.port)) {
+            while (accepted < maxConnections) {
+                Socket clientSocket = serverSocket.accept();
+                accepted++;
+                executor.submit(() -> handleClient(clientSocket));
+            }
+        } catch (Exception e) {
+            System.err.println("Limited server error: " + e.getMessage());
+        } finally {
+            executor.shutdown();
+        }
+    }
+
     // All command handling remains here
     void handleClient(Socket clientSocket) {
         System.out.println("Thread [" + Thread.currentThread().getName() + "] handling client: " + clientSocket);

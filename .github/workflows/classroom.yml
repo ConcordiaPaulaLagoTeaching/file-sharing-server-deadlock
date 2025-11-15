@@ -1,12 +1,3 @@
-# Local testing notes:
-# - Run tests directly in repo root:
-#     mvn -Dtest=FileSystemTests#testCreateFile test
-#     mvn -Dtest=ServerTests#testServerRestartPersistence test
-#     or run all: mvn test
-# - To run the workflow job locally with act:
-#     1) Install act: https://github.com/nektos/act
-#     2) echo '{}' > event.json
-#     3) act -P ubuntu-latest=nektos/act-environments-ubuntu:18.04 -e event.json -j local-mvn-tests
 name: Autograding Tests
 'on':
   repository_dispatch: {}
