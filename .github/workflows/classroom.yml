@@ -83,7 +83,7 @@ jobs:
       with:
         test-name: Restart Persistence
         setup-command: ''
-        command: mvn -DTest=ServerTests#testServerRestartPersistence test
+        command: mvn -Dtest=ServerTests#testServerRestartPersistence test
         timeout: 10
         max-score: 8
     - name: Autograding Reporter
