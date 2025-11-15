@@ -3,6 +3,7 @@ name: Autograding Tests
   repository_dispatch: {}
   schedule:
     - cron: '0 23 * * *'
+  workflow_dispatch: {}    # enable manual runs (useful for local testing with 'act')
 permissions:
   checks: write
   actions: read
@@ -99,3 +100,23 @@ jobs:
         RESTART-PERSISTENCE_RESULTS: "${{steps.restart-persistence.outputs.result}}"
       with:
         runners: create-file-test,write-and-read-long-test,write-and-read-test,test-createlongname,delete-file,server-handles-1000-clients,server-malformed-input,restart-persistence
+  local-mvn-tests:
+    name: Local MVN tests (for act/local testing)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Install JDK and Maven (needed for local act images)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y maven openjdk-11-jdk
+    - name: Run mvn tests (same tests as autograder)
+      run: |
+        mvn -Dtest=FileSystemTests#testCreateFile test
+        mvn -Dtest=FileSystemTests#testWriteAndReadLongFile test
+        mvn -Dtest=FileSystemTests#testWriteAndReadFile test
+        mvn -Dtest=FileSystemTests#testTooLongFilename test
+        mvn -Dtest=FileSystemTests#testDeleteFile test
+        mvn -Dtest=ServerTests#testHandlesHundredsOfClientsQuickly test
+        mvn -Dtest=ServerTests#testMalformedInputDoesNotCrashServer test
+        mvn -Dtest=ServerTests#testServerRestartPersistence test
