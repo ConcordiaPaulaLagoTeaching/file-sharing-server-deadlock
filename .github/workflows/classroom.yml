@@ -1,9 +1,11 @@
 name: Autograding Tests
 'on':
+  push:
+    branches: [Aren, main]
   repository_dispatch: {}
   schedule:
     - cron: '0 23 * * *'
-  workflow_dispatch: {}    # enable manual runs (useful for local testing with 'act')
+  workflow_dispatch: {}
 permissions:
   checks: write
   actions: read
