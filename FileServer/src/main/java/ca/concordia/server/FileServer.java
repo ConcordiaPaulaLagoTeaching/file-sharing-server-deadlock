@@ -128,26 +128,14 @@ public class FileServer {
                             }
 
                             byte[] data = contentStr.getBytes(StandardCharsets.UTF_8);
-                            final byte[] existing;
-                            try {
-                                existing = fsManager.readFile(filename);
-                            } catch (Exception e) {
-                                writer.println("ERROR: File not found.");
-                                writer.flush();
-                                break;
-                            }
-
-                            byte[] existingSafe = (existing == null) ? new byte[0] : existing;
-                            byte[] combined = new byte[existingSafe.length + data.length];
-                            System.arraycopy(existingSafe, 0, combined, 0, existingSafe.length);
-                            System.arraycopy(data, 0, combined, existingSafe.length, data.length);
 
                             try {
-                                fsManager.writeFile(filename, combined);
-                                writer.println("SUCCESS: " + filename + " is now " + combined.length + " bytes.");
+                                fsManager.writeFile(filename, data);
+                                writer.println("SUCCESS: " + filename + " is now " + data.length + " bytes.");
                             } catch (Exception e) {
                                 writer.println("ERROR: " + e.getMessage());
                             }
+
                         } finally {
                             writer.flush();
                         }
